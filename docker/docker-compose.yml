@@ -1,14 +1,14 @@
 version: "3"
 services:
-  give-me-some-credit:
+  house_prices:
     build:
       context: ../
       dockerfile: ./docker/Dockerfile
       args:
         - username=devel
         - userid=1000
-    container_name: house-prices
-    image: house-prices
+    container_name: house_prices
+    image: house_prices
     restart: unless-stopped
     logging:
       driver: json-file
