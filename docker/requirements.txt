@@ -4,5 +4,6 @@ matplotlib
 rise
 seaborn
 ipynb
-
+keras
+tensorflow-gpu
 
