@@ -6,4 +6,3 @@ seaborn
 ipynb
 keras
 tensorflow-gpu
-
