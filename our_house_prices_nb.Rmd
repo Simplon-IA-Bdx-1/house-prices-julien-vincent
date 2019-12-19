@@ -1,0 +1,309 @@
+---
+title: "R_Notebook_House_Prices"
+author : "Julien Lagoutte"
+date : "23/11/2019"
+output: html_notebook
+---
+```{r}
+library(dplyr)
+library(ggplot2)
+library(FactoMineR)
+library(factoextra)
+```
+
+### On va commencer par travailler sur les features avec des "NA" ou avec beaucoup de "0"
+
+#### Télécharger les jeux de données sur lesquels nous allons travailler
+
+```{r}
+
+trainfull <- read.csv("C:/Users/Utilisateur/Desktop/House_prices/csv_file/train.csv")
+
+dim(trainfull)
+
+test <- read.csv("C:/Users/Utilisateur/Desktop/House_prices/csv_file/test.csv")
+dim(test)
+
+train_quanti<-select_if(trainfull, is.numeric)
+
+```
+
+#### Pour l'instant, on ne s'occupe pas du fichier test (on le reprendra au moment de l'envoi à Kaggle)
+
+#### Dans le jeu de données trainfull, on s'occupe d'abord des features comportant des "NA"
+```{r}
+train_quali<- select_if(trainfull, is.factor)
+# Nombre de "NA" dans chaque colonne de train_quali
+colSums(is.na(train_quali))
+```
+#### On va d'abord travailler sur ces features pour savoir par quoi on remplace les "NA"
+```{r}
+attribut_NA_quali<-train_quali[,which(colSums(is.na(train_quali))>0)]
+summary(attribut_NA_quali)
+```
+#### Explications des NA pour chaque feature, d'après la description Kaggle :
+
+* Alley : NA 	No alley access
+* MasVnrType : No explication
+* BsmtQual : NA	No Basement 
+* BsmtCond : NA	No Basement  
+* BsmtExposure : NA	No Basement 
+* BsmtFinType1 : NA	No Basement
+* BsmtFinType2 : NA	No Basement 
+* Electrical : No exlication
+* FirePlaceQu : NA	No Fireplace
+* GarageType : NA	No Garage  
+* GarageFinish : NA	No Garage 
+* GarageQual : NA	No Garage
+* GarageCond : NA	No Garage 
+* PoolQC : NA	No Pool
+* Fence : NA No Fence
+* MiscFeature : NA None
+
+#### Pour toutes les variables sauf MasVnrType, Electrical, les features dépendent d'une autre feature
+
+On remarque que lorsque l'attribut de causalité n'est pas dans la maison, le jeu de données a indiqué "NA"
+Pour toutes ces features, nous allons donc remplacer les "NA" par "None"
+
+Pour les features MasVnrType et Electrical, comme nous n'avons pas d'infos, on remplace les "NA" par "unknown"
+```{r}
+levels(attribut_NA_quali$Alley)<-c(levels(attribut_NA_quali$Alley),"none")
+levels(attribut_NA_quali$BsmtQual)<-c(levels(attribut_NA_quali$BsmtQual),"none")
+levels(attribut_NA_quali$BsmtCond)<-c(levels(attribut_NA_quali$BsmtCond),"none")
+levels(attribut_NA_quali$BsmtExposure)<-c(levels(attribut_NA_quali$BsmtExposure),"none")
+levels(attribut_NA_quali$BsmtFinType1)<-c(levels(attribut_NA_quali$BsmtFinType1),"none")
+levels(attribut_NA_quali$BsmtFinType2)<-c(levels(attribut_NA_quali$BsmtFinType2),"none")
+levels(attribut_NA_quali$FireplaceQu)<-c(levels(attribut_NA_quali$FireplaceQu),"none")
+levels(attribut_NA_quali$GarageType)<-c(levels(attribut_NA_quali$GarageType),"none")
+levels(attribut_NA_quali$GarageFinish)<-c(levels(attribut_NA_quali$GarageFinish),"none")
+levels(attribut_NA_quali$GarageQual)<-c(levels(attribut_NA_quali$GarageQual),"none")
+levels(attribut_NA_quali$GarageCond)<-c(levels(attribut_NA_quali$GarageCond),"none")
+levels(attribut_NA_quali$PoolQC)<-c(levels(attribut_NA_quali$PoolQC),"none")
+levels(attribut_NA_quali$Fence)<-c(levels(attribut_NA_quali$Fence),"none")
+levels(attribut_NA_quali$MiscFeature)<-c(levels(attribut_NA_quali$MiscFeature),"none")
+
+levels(attribut_NA_quali$MasVnrType)<-c(levels(attribut_NA_quali$MasVnrType),"unknown")
+levels(attribut_NA_quali$Electrical)<-c(levels(attribut_NA_quali$Electrical),"unknown")
+
+attribut_NA_quali[is.na(attribut_NA_quali)] <- "none"
+attribut_NA_quali[is.na(attribut_NA_quali)] <- "unknown"
+
+```
+```{r}
+summary(attribut_NA_quali)
+# On voit qu'il n'y a plus de "NA" dans notre dataframe
+# Il ne restera plus qu'à appliquer ça au trainfull
+```
+#### On travaille maintenant plus particulièrement sur les features avec bcp de "NA" ou de "none"
+
+```{r}
+attribut_rare<-train_quali[,which(colSums(is.na(train_quali))>300)]
+summary(attribut_rare)
+
+```
+Dans la description, je remarque que les features Alley et Street ont les mêmes attributs (Grvl	Gravel, Pave	Paved).
+Je décide donc de changer le type de la feature Alley en booléen (1 si a une alley, 0 si pas d'alley) pour qu'il n'y ait plus de redondance avec la feature Street
+
+```{r}
+# code pour changer la feature Alley
+levels(train_quali$Alley)<-c(levels(train_quali$Alley),0, 1)
+train_quali$Alley[is.na(train_quali$Alley)] <- 0
+train_quali$Alley[train_quali$Alley=="Grvl"] <- 1
+train_quali$Alley[train_quali$Alley=="Pave"] <- 1
+
+summary(train_quali$Alley)
+
+```
+
+```{r}
+# On crée le logSalePrice pour pouvoir travailler en binarité par rapport à l'output
+train_quanti$logSalePrice <- log(train_quanti$SalePrice)
+```
+
+
+```{r}
+summary(train_quali$PoolQC)
+summary(train_quanti$PoolArea)
+```
+
+```{r}
+qplot(train_quanti$PoolArea,train_quanti$logSalePrice)
+```
+Pour la Pool,
+Je remarque qu'il y a peu de maison avec Pool, et que cela n'a pas bcp d'influence sur le SalePrice
+Peut-être pouvons nous remplacer les deux features sur la Pool par un booléen qui mentionne si la maison a une Pool (1) ou si elle n'en a pas (0)
+
+```{r}
+# code pour changer les features PoolQC, PoolArea
+levels(train_quali$PoolQC)<-c(levels(train_quali$PoolQC),0, 1)
+
+train_quali$PoolQC[is.na(train_quali$PoolQC)] <- 0
+train_quali$PoolQC[train_quali$PoolQC=="Ex"] <- 1
+train_quali$PoolQC[train_quali$PoolQC=="Fa"] <- 1
+train_quali$PoolQC[train_quali$PoolQC=="Gd"] <- 1
+
+train_quanti <- select(train_quanti, -PoolArea)
+train_quali$Pool <- train_quali$PoolQC
+train_quali <- select(train_quali, -PoolQC)
+summary(train_quali$Pool)
+```
+
+On travaille maintenant sur la feature "FireplaceQu" qui est lié à la feature quanti "FirePlaces"
+
+```{r}
+summary(train_quanti$Fireplaces)
+```
+FirePlaces oscille en 0 et 3
+et FireplaceQu est une échelle de qualité entre excellent et Poor (et None quand il n'y en a pas)
+On pourrait peut etre remplacer FireplaceQu par une échelle allant de 0 à 5 et on pondère par le nombre de FirePlaces ?
+
+exemple : si FirePlaces =2 et FireplaceQu =excellent(ou 5), on aurait une nouvelle FireplaceQu = 10
+```{r}
+# code pour modifier FirePlaces et FireplaceQU
+levels(train_quali$FireplaceQu)<-c(levels(train_quali$FireplaceQu), 0, 1, 2, 3, 4, 5)
+
+train_quali$FireplaceQu[is.na(train_quali$FireplaceQu)] <- 0
+train_quali$FireplaceQu[train_quali$FireplaceQu=="TA"] <- 1
+train_quali$FireplaceQu[train_quali$FireplaceQu=="Po"] <- 2
+train_quali$FireplaceQu[train_quali$FireplaceQu=="Gd"] <- 3
+train_quali$FireplaceQu[train_quali$FireplaceQu=="Fa"] <- 4
+train_quali$FireplaceQu[train_quali$FireplaceQu=="Ex"] <- 5
+
+summary(train_quali$FireplaceQu)
+
+# Pour l'instant, je ne pondère pas par le nbre de FirePlaces
+```
+
+Dans la description, les features Fence et MiscFeature ne sont reliés à aucune autre feature
+Donc, on reste à la seule modification des "NA" en "none"
+
+#### On travaille maintenant sur les autres features qualitatives
+
+On étudie la description des features de Kaggle
+```{r}
+# voir pour Kitchen (pareil que pour FirePlaces)
+summary(train_quali$KitchenQual)
+summary(train_quanti$KitchenAbvGr)
+
+# Je ne pense pas toucher aux features sur la Kitchen
+
+# pour Garage, des features qui se repètent donc voir pour en enlever
+```
+Pour les features concernant le Garage :
+changement que pour GarageQual et GarageCond
+faire échelle de valeur de 0 à 5 pour chaque feature et additionner les deux notes, ça donnera une note générale de la qualité du garage
+
+```{r}
+summary(train_quali$GarageQual)
+summary(train_quali$GarageCond)
+```
+
+```{r}
+# code pour les features GarageQual et GarageCond
+levels(train_quali$GarageQual)<-c(levels(train_quali$GarageQual), 0, 1, 2, 3, 4, 5)
+
+train_quali$GarageQual[is.na(train_quali$GarageQual)] <- 0
+train_quali$GarageQual[train_quali$GarageQual=="TA"] <- 1
+train_quali$GarageQual[train_quali$GarageQual=="Po"] <- 2
+train_quali$GarageQual[train_quali$GarageQual=="Gd"] <- 3
+train_quali$GarageQual[train_quali$GarageQual=="Fa"] <- 4
+train_quali$GarageQual[train_quali$GarageQual=="Ex"] <- 5
+
+summary(train_quali$GarageQual)
+```
+
+```{r}
+levels(train_quali$GarageCond)<-c(levels(train_quali$GarageCond), 0, 1, 2, 3, 4, 5)
+
+train_quali$GarageCond[is.na(train_quali$GarageCond)] <- 0
+train_quali$GarageCond[train_quali$GarageCond=="TA"] <- 1
+train_quali$GarageCond[train_quali$GarageCond=="Po"] <- 2
+train_quali$GarageCond[train_quali$GarageCond=="Gd"] <- 3
+train_quali$GarageCond[train_quali$GarageCond=="Fa"] <- 4
+train_quali$GarageCond[train_quali$GarageCond=="Ex"] <- 5
+
+summary(train_quali$GarageCond)
+```
+
+```{r}
+train_quali$GarageQual <- as.numeric(train_quali$GarageQual)
+train_quali$GarageCond <- as.numeric(train_quali$GarageCond)
+
+
+summary(train_quali$GarageQual)
+summary(train_quali$GarageCond)
+```
+
+```{r}
+train_quali$GarageQual <- train_quali$GarageQual + train_quali$GarageCond - 12
+
+summary(train_quali$GarageQual)
+```
+
+```{r}
+train_quali <- select(train_quali, -GarageCond)
+
+summary(train_quali$GarageQual)
+```
+
+Même travail sur ExterQual et ExterCond
+
+```{r}
+# même code que pour les features sur le garage, comme ça on aura une note sur 10 de la qualité de ExterQual
+```
+
+Features Exterior1st et Exterior2nd
+
+```{r}
+summary(train_quali$Exterior1st)
+summary(train_quali$Exterior2nd)
+
+table(train_quali$Exterior1st, train_quali$Exterior2nd)
+```
+On remarque ces deux features sont quasiment identiques
+On prend donc la décision d'en enlever une et de ne garder que Exterior1st
+
+```{r}
+# Code pour supprimer Exterior2nd
+train_quali<-select(train_quali, -Exterior2nd)
+
+```
+
+Même travail avec Condition1 et Condition2
+
+```{r}
+summary(train_quali$Condition1)
+summary(train_quali$Condition2)
+
+table(train_quali$Condition1, train_quali$Condition2)
+```
+La feature Condition2 n'apporte pas plus d'info puisque la feature est pratiquement tjrs "Norm"
+On décide de supprimer la feature Condition2
+
+```{r}
+# code pour supprimer la feature Condition2
+train_quali<-select(train_quali, -Condition2)
+
+```
+
+##### Travail sur les features Bsmt (BsmtQual BsmtCond BsmtExposure BsmtFinType1 BsmtFinType2)
+
+Dans les variables quanti,
+Il existe une colonne "TotalBsmtSF" qui est égale à la somme de 3 features
+
+Donc on reprend la même idée :
+* en convertissant les ratings de BsmtFinType1 et BsmtFinType2 en note allant de 0 à 6
+* en additionnant les deux features pour avoir une note globale
+
+```{r}
+# code pour modifier les features BsmtFinType1 et BsmtFinType2
+```
+
+## Fin du travai sur les variables qualitatives
+
+```{r}
+train_quanti<-select_if(trainfull, is.numeric)
+# Nombre de "NA" dans chaque colonne de train_quanti
+colSums(is.na(train_quanti))
+```
+
