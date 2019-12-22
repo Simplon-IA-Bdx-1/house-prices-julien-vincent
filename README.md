@@ -1,0 +1,1 @@
+Authors : [Julien Lagoutte](https://github.com/JuLagoutte) & [Vincent Lagache](https://github.com/vlagache)
